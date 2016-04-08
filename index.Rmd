@@ -5,18 +5,90 @@ date: "April 7, 2016"
 output: html_document
 ---
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+##Introduction
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website
+here: http://groupware.les.inf.puc-rio.br/har (http://groupware.les.inf.puc-rio.br/har) (see the section on the Weight Lifting Exercise Dataset).
+
+This project attempts to use such data to predict what exercises people are performing.
+
+##Source
+ http://groupware.les.inf.puc-rio.br/har
+```{r,message=FALSE}
+#libraries
+library(caret)
+library(randomForest)
+library(e1071)
+```
+
+
+##Data Loading:
+
+```{r,cache=TRUE,message=FALSE}
+setwd("~/Documents/learning/Practical ML/Course Project")
+pml.training <- read.csv("pml-training.csv",na.strings = c("","NA"))
+pml.testing <- read.csv("pml-testing.csv",na.strings = c("","NA"))
+```
+
+##Training and Testing Sets
+Generate a testing set and a training set for the training data provided:
+```{r}
+# create testing set
+set.seed(101)
+inTrain = createDataPartition(pml.training$classe, p = 3/4)[[1]]
+training = pml.training[inTrain, ]
+testing = pml.training[-inTrain, ]
+```
+
+##Preliminary Data Analysis:
+Gain general understanding of the dataset to develop a strategy for predictor selection. I removed descriptive columns, variables with mostly/all null values and near zero variance fields. This brings the set of columns in the training set down from 160 to 53.
+```{r,message=FALSE}
+#Eheck out fields
+ncol(training)
+#there are 160 columns
+#names(training)
+#Output not included in report due to length
+#Fields 1:7 are identifier fields, 8:159 potential predictive/measured fields and 160 is the "classes" we are trying to predict
+#Removing identifier fields leaves 152 columns.
+training <- training[,8:160]
+#remove near zero variance fields:
+nzv <- nearZeroVar(training,saveMetrics=TRUE)
+nzv.list <- nearZeroVar(training)
+training <- training[,-nzv.list]
+ncol(training)
+# columns w/ many NAs
+na.count <-sapply(training, function(x) sum(length(which(is.na(x)))))
+#na.count 
+#By looking at na.count, columns either have no NAs or mostly NAs.
+#Remove columns with NAs
+col.na <- (names(na.count[na.count > 0]))
+training <- training[,!names(training) %in% col.na]
+ncol(training)
+#This leaves us with 53 columns
+```
+
+##Generate model
+Given many variables and little understanding, and a substantial number of rows, random forest and gradient boosting models would be appropriate. Due to time and processing restraints (and high validated accuracy to be seen in the cross-validation section), I chose to use a traditional random forest method from the randomForest package.
+```{r, cache=TRUE}
+rf.model <- randomForest(classe ~., data=training, ntrees = 10)
+```
+
+##Analyze accuracy of model on training set
+There is a 100% accuracy on the training set, but this may be due to overfitting.
 
 ```{r}
-summary(cars)
+rf.train <- predict(rf.model, training)
+confusionMatrix(training$classe,rf.train)
 ```
 
-You can also embed plots, for example:
+##Cross Validation: Analyze accuracy of model on testing set
+On the testing set, there is still a 99.47% accuracy, which indicates that the methodology for determining workout positions is useful.  
 
-```{r, echo=FALSE}
-plot(cars)
+```{r}
+rf.train <- predict(rf.model, testing)
+confusionMatrix(testing$classe,rf.train)
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
